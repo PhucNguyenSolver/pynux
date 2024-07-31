@@ -26,8 +26,8 @@ class Repo(INode):
     for x in files: self.insert(x)
     for x in dirs: self.insert(x)
     # wiring
-    self.children["."] = self
-    if parent is not None: self.children[".."] = parent
+    self.children["."] = Link(".", self)
+    if parent is not None: self.children[".."] = Link("..", parent)
   
   def list(self):
     return list(self.children.keys())
@@ -35,9 +35,20 @@ class Repo(INode):
   def insert(self, node: INode): 
     self.children[node.name] = node
     if isinstance(node, Repo):
-      node.children[".."] = self # wiring back
+      node.children[".."] = Link("..", self) # wiring back
   
   def removeByName(self, victim): del self.children[victim]
+
+  def printTree(self, leftpad=2, root=True):
+    offset = ' '*leftpad + '|_'
+    print(self.name if root else f"{offset[2:]}{self.name}")
+    for x in self.children.values():
+      if x.name in [".", ".."]:
+        continue
+      elif isinstance(x, Repo):
+        x.printTree(leftpad + 2, root=False)
+      else:
+        print(offset + x.name)
 
 class App:
   def __init__(self, root_fs: Repo):
@@ -66,10 +77,17 @@ class App:
   
   def touch(self, filename):
     self.pwd.insert(File(filename))
+  
+  def tree(self, dirname):
+    ret = self.pwd
+    self.cd(dirname)
+    self.pwd.printTree()
+    self.pwd = ret
 
 
 def execute(app: App, command):
   [command, *args] = str(command).split(" ")
+  args = list(filter(None, args))
   match command:
     case "ls": app.ls()
     case "cd": app.cd(args[0])
@@ -77,6 +95,7 @@ def execute(app: App, command):
     case "rmdir": app.rm(args[0])
     case "touch": app.touch(args[0])
     case "rm": app.rm(args[0])
+    case "tree": app.tree(args[0] if args[0:] else ".")
     case "": pass
     case c_: print("Invalid command", c_)
 
@@ -86,6 +105,7 @@ def main():
 
   def test_on_production():
     commands = ["ls", "mkdir dir1", "mkdir dir2", "cd dir2", "touch file1", "touch file2", "cd .", "cd ..", "touch file0", "touch never", "rm never", "ls"]
+    commands.append("tree")
     for c in commands: execute(app, c)
   test_on_production()
 
